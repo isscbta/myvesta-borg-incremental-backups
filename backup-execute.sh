@@ -144,12 +144,21 @@ fi
 # Construct the SSH command with the specified or default port
 RSYNC_SSH_COMMAND="ssh -p $REMOTE_BACKUP_SERVER_PORT"
 
-# Perform the rsync operation if both the remote server and directory are specified
+# Ensure the remote directory exists before starting the rsync
 if [[ ! -z "$REMOTE_BACKUP_SERVER_HOST" && ! -z "$REMOTE_BACKUP_SERVER_DIR" ]]; then
-  echo
+  echo "$(date +'%F %T') Checking if remote directory exists..."
+  $RSYNC_SSH_COMMAND $REMOTE_BACKUP_SERVER_USER@$REMOTE_BACKUP_SERVER_HOST "mkdir -p $REMOTE_BACKUP_SERVER_DIR"
+  if [ $? -eq 0 ]; then
+    echo "Remote directory exists or was created successfully."
+  else
+    echo "Failed to create remote directory. Check permissions and path."
+    exit 1
+  fi
+
   echo "$(date +'%F %T') #################### SYNC BACKUP DIR $BACKUP_DIR TO REMOTE SERVER: $REMOTE_BACKUP_SERVER_HOST:$REMOTE_BACKUP_SERVER_DIR ####################"
   rsync -za --delete --stats -e "$RSYNC_SSH_COMMAND" $BACKUP_DIR/ $REMOTE_BACKUP_SERVER_USER@$REMOTE_BACKUP_SERVER_HOST:$REMOTE_BACKUP_SERVER_DIR/
 fi
+
 
 echo
 echo "$(date +'%F %T') #################### BACKUP COMPLETED ####################"
