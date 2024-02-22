@@ -132,10 +132,23 @@ echo "-- Cleaning old backup archives"
 borg prune $OPTIONS_PRUNE $REPO_VESTA
 echo
 
-if [[ ! -z "$REMOTE_BACKUP_SERVER" && ! -z "$REMOTE_BACKUP_SERVER_DIR" ]]; then
+# Extract hostname and port; if no port is specified, use the default (22)
+REMOTE_BACKUP_SERVER_HOST=$(echo $REMOTE_BACKUP_SERVER | cut -d':' -f1)
+REMOTE_BACKUP_SERVER_PORT=$(echo $REMOTE_BACKUP_SERVER | cut -d':' -f2)
+
+# Check if a port is part of REMOTE_BACKUP_SERVER; if not, use the default port 22
+if [[ -z "$REMOTE_BACKUP_SERVER_PORT" ]]; then
+  REMOTE_BACKUP_SERVER_PORT=22
+fi
+
+# Construct the SSH command with the specified or default port
+RSYNC_SSH_COMMAND="ssh -p $REMOTE_BACKUP_SERVER_PORT"
+
+# Perform the rsync operation if both the remote server and directory are specified
+if [[ ! -z "$REMOTE_BACKUP_SERVER_HOST" && ! -z "$REMOTE_BACKUP_SERVER_DIR" ]]; then
   echo
-  echo "$(date +'%F %T') #################### SYNC BACKUP DIR $BACKUP_DIR TO REMOTE SERVER: $REMOTE_BACKUP_SERVER:$REMOTE_BACKUP_SERVER_DIR ####################"
-  rsync -za --delete --stats $BACKUP_DIR/ $REMOTE_BACKUP_SERVER_USER@$REMOTE_BACKUP_SERVER:$REMOTE_BACKUP_SERVER_DIR/
+  echo "$(date +'%F %T') #################### SYNC BACKUP DIR $BACKUP_DIR TO REMOTE SERVER: $REMOTE_BACKUP_SERVER_HOST:$REMOTE_BACKUP_SERVER_DIR ####################"
+  rsync -za --delete --stats -e "$RSYNC_SSH_COMMAND" $BACKUP_DIR/ $REMOTE_BACKUP_SERVER_USER@$REMOTE_BACKUP_SERVER_HOST:$REMOTE_BACKUP_SERVER_DIR/
 fi
 
 echo
