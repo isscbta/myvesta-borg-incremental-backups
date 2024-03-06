@@ -4,6 +4,10 @@ source $CURRENT_DIR/config.ini
 
 ### Variables ###
 
+# Includes
+source $VESTA/func/main.sh
+source $VESTA/conf/vesta.conf
+
 # Set script start time
 START_TIME=`date +%s`
 
@@ -168,3 +172,12 @@ RUN_TIME=$((END_TIME-START_TIME))
 
 echo "-- Execution time: $(date -u -d @${RUN_TIME} +'%T')"
 echo
+
+LOG_FILE="/var/log/scripts/backup/backup_$(date "+%Y-%m-%d").log"
+
+if [ ! -z "$NOTIFY_ADMIN_INCREMENTAL_BACKUP" ]; then
+    IFS=',' read -r -a email_addresses <<< "$NOTIFY_ADMIN_INCREMENTAL_BACKUP"
+    for email_address in "${email_addresses[@]}"; do
+        cat $LOG_FILE | $SENDMAIL -s "Incremental backup report for $HOSTNAME" "$email_address" 'yes'
+    done
+fi
