@@ -40,7 +40,7 @@ To install the script collection run the following commands as root:
 ```
 mkdir -p /root/scripts
 cd /root/scripts
-git clone https://github.com/ramirojoaquin/vestacp-borg-incremental-backups.git
+git clone https://github.com/isscbta/myvesta-borg-incremental-backups
 ```
 
 ### 3- Create directory to store logs:
