@@ -26,7 +26,7 @@ source /usr/local/vesta/func/main.sh
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '2' "$#" 'USER'
+check_args '2' "$#" 'TIME USER'
 is_object_valid 'user' 'USER' "$USER"
 is_object_unsuspended 'user' 'USER' "$USER"
 
@@ -40,7 +40,7 @@ fi
 #----------------------------------------------------------#
 
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
-source $CURRENT_DIR/config.ini
+source /root/scripts/myvesta-borg-incremental-backups/config.ini
 
 # This script will restore the given user from incremental backup.
 USAGE="restore-user.sh 2018-03-25 user"
