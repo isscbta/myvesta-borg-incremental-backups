@@ -1,0 +1,121 @@
+#!/bin/bash
+# info: v-borg-dump-databases
+# options: [TIME]
+#
+# This command dumps all databases to Borg repositories for each user.
+
+#----------------------------------------------------------#
+#                    Variable&Function                     #
+#----------------------------------------------------------#
+
+whoami=$(whoami)
+if [ "$whoami" != "root" ]; then
+    echo "You must be root to execute this script"
+    exit 1
+fi
+
+# Importing system environment
+source /etc/profile
+
+# Argument definition
+TIME=${1-$(date +'%F')}
+
+# Includes
+source /usr/local/vesta/func/main.sh
+source /usr/local/vesta/conf/vesta.conf
+
+# Get current directory
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '0' "$#" '[TIME]'
+
+# Check if remote backup server is configured
+if [ -z "$REMOTE_BACKUP_SERVER" ]; then
+    echo "Remote backup server not configured. Please set REMOTE_BACKUP_SERVER in vesta.conf"
+    exit 1
+fi
+
+# Check if borg is installed
+if ! command -v borg &> /dev/null; then
+    echo "Borg is not installed. Please install borg first."
+    exit 1
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+### Remote Borg variables ###
+# Extract hostname and port; if no port is specified, use the default (22)
+REMOTE_BACKUP_SERVER_HOST=$(echo $REMOTE_BACKUP_SERVER | cut -d':' -f1)
+REMOTE_BACKUP_SERVER_PORT=$(echo $REMOTE_BACKUP_SERVER | cut -d':' -f2)
+if [[ -z "$REMOTE_BACKUP_SERVER_PORT" ]]; then
+  REMOTE_BACKUP_SERVER_PORT=22
+fi
+
+# Remote Borg prefix (ssh)
+BORG_REMOTE_PREFIX="ssh://$REMOTE_BACKUP_SERVER_USER@$REMOTE_BACKUP_SERVER_HOST:$REMOTE_BACKUP_SERVER_PORT/$REMOTE_BACKUP_SERVER_DIR/borg"
+
+DB_COUNT=0
+
+echo "$(date +'%F %T') #################### DUMP DATABASES TO BORG REPOSITORIES ####################"
+
+# Get user list
+while read USER ; do
+    # Skip header lines from v-list-users
+    if [[ "$USER" == *"USER"* ]] || [[ "$USER" == *"---"* ]]; then
+        continue
+    fi
+    
+    USER_REPO="$BORG_REMOTE_PREFIX/db/$USER"
+    
+    # Check if repo was initialized, if not we perform borg init
+    borg init $OPTIONS_INIT $USER_REPO 2>/dev/null
+    
+    echo "-- Processing databases for user: $USER"
+    
+    # Get MySQL databases
+    while read DATABASE ; do
+        if [ ! -z "$DATABASE" ]; then
+            ARCHIVE="$DATABASE-$TIME"
+            echo "-- Creating new backup archive $USER_REPO::$ARCHIVE"
+            mysqldump $DATABASE --opt --routines --skip-comments | borg create $OPTIONS_CREATE $USER_REPO::$ARCHIVE -
+            borg prune $OPTIONS_PRUNE $USER_REPO --prefix ${DATABASE}'-'
+            let DB_COUNT++
+        fi
+    done < <(/usr/local/vesta/bin/v-list-databases $USER | grep -w mysql | cut -d " " -f1)
+    
+    # Get PostgreSQL databases
+    while read DATABASE ; do
+        if [ ! -z "$DATABASE" ]; then
+            ARCHIVE="$DATABASE-$TIME"
+            echo "-- Creating new backup archive $USER_REPO::$ARCHIVE"
+            
+            # Check if pg-pgdump.sh exists
+            if [ -f "$CURRENT_DIR/../inc/pg-pgdump.sh" ]; then
+                $CURRENT_DIR/../inc/pg-pgdump.sh $DATABASE | borg create $OPTIONS_CREATE $USER_REPO::$ARCHIVE -
+            else
+                # Fallback to direct pg_dump
+                pg_dump $DATABASE | borg create $OPTIONS_CREATE $USER_REPO::$ARCHIVE -
+            fi
+            
+            borg prune $OPTIONS_PRUNE $USER_REPO --prefix ${DATABASE}'-'
+            let DB_COUNT++
+        fi
+    done < <(/usr/local/vesta/bin/v-list-databases $USER | grep -w pgsql | cut -d " " -f1)
+    
+    echo "-- Cleaning old backup archives for user: $USER"
+    echo
+done < <(/usr/local/vesta/bin/v-list-users | cut -d " " -f1)
+
+echo "$(date +'%F %T') ########## $DB_COUNT DATABASES SAVED ##########"
+echo
+
+# Logging
+log_event "$OK" "$ARGUMENTS"
+
+exit 
